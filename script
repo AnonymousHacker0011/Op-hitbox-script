@@ -29,7 +29,7 @@ corner.CornerRadius = UDim.new(0, 8)
 corner.Parent = button
 
 --------------------------------------------------
--- HITBOX FUNCTIONS
+-- HITBOX HELPERS
 --------------------------------------------------
 local function removeHitbox(character)
 	local hrp = character:FindFirstChild("HumanoidRootPart")
@@ -42,15 +42,35 @@ local function removeHitbox(character)
 	end
 end
 
+local function resetHitbox(character)
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	removeHitbox(character)
+	hrp.Size = Vector3.new(2, 2, 1)
+	hrp.Shape = Enum.PartType.Block
+	hrp.Material = Enum.Material.Plastic
+	hrp.Transparency = 1
+	hrp.CanCollide = false
+	hrp.Color = Color3.new(1, 1, 1)
+end
+
+--------------------------------------------------
+-- APPLY HITBOX
+--------------------------------------------------
 local function applyToCharacter(player, character)
 	if not _G.Disabled then
-		removeHitbox(character)
+		resetHitbox(character)
 		return
 	end
 
-	if player == LocalPlayer then return end
+	if player == LocalPlayer then
+		resetHitbox(character)
+		return
+	end
+
 	if player.Team == LocalPlayer.Team then
-		removeHitbox(character)
+		resetHitbox(character)
 		return
 	end
 
@@ -58,7 +78,6 @@ local function applyToCharacter(player, character)
 	local humanoid = character:WaitForChild("Humanoid", 5)
 	if not hrp or not humanoid then return end
 
-	-- HITBOX
 	hrp.Size = Vector3.new(_G.HeadSize, _G.HeadSize, _G.HeadSize)
 	hrp.Shape = Enum.PartType.Ball
 	hrp.CanCollide = false
@@ -81,7 +100,7 @@ local function applyToCharacter(player, character)
 	sphere.Transparency = 0.7
 
 	humanoid.Died:Connect(function()
-		removeHitbox(character)
+		resetHitbox(character)
 	end)
 end
 
