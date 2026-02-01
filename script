@@ -1,14 +1,18 @@
+--==================================================
 -- SETTINGS
+--==================================================
 _G.HeadSize = 15
 _G.Disabled = true -- true = ON, false = OFF
 
+--==================================================
 -- SERVICES
+--==================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
---------------------------------------------------
+--==================================================
 -- UI
---------------------------------------------------
+--==================================================
 local gui = Instance.new("ScreenGui")
 gui.Name = "HitboxToggleUI"
 gui.ResetOnSpawn = false
@@ -28,17 +32,16 @@ local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 8)
 corner.Parent = button
 
---------------------------------------------------
+--==================================================
 -- HITBOX HELPERS
---------------------------------------------------
-local function removeHitbox(character)
+--==================================================
+local function removeAdornment(character)
 	local hrp = character:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 
-	for _, v in ipairs(hrp:GetChildren()) do
-		if v:IsA("SphereHandleAdornment") then
-			v:Destroy()
-		end
+	local adorn = hrp:FindFirstChild("HitboxOutline")
+	if adorn then
+		adorn:Destroy()
 	end
 end
 
@@ -46,7 +49,8 @@ local function resetHitbox(character)
 	local hrp = character:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 
-	removeHitbox(character)
+	removeAdornment(character)
+
 	hrp.Size = Vector3.new(2, 2, 1)
 	hrp.Shape = Enum.PartType.Block
 	hrp.Material = Enum.Material.Plastic
@@ -55,37 +59,33 @@ local function resetHitbox(character)
 	hrp.Color = Color3.new(1, 1, 1)
 end
 
---------------------------------------------------
+--==================================================
 -- APPLY HITBOX
---------------------------------------------------
-local function applyToCharacter(player, character)
-	if not _G.Disabled then
-		resetHitbox(character)
-		return
-	end
+--==================================================
+local function applyHitbox(player)
+	if not player.Character then return end
+	local character = player.Character
 
-	if player == LocalPlayer then
-		resetHitbox(character)
-		return
-	end
-
-	if player.Team == LocalPlayer.Team then
-		resetHitbox(character)
-		return
-	end
-
-	local hrp = character:WaitForChild("HumanoidRootPart", 5)
-	local humanoid = character:WaitForChild("Humanoid", 5)
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character:FindFirstChild("Humanoid")
 	if not hrp or not humanoid then return end
 
+	-- Conditions where ESP should NOT exist
+	if not _G.Disabled
+		or player == LocalPlayer
+		or player.Team == LocalPlayer.Team then
+		resetHitbox(character)
+		return
+	end
+
+	-- Apply hitbox
 	hrp.Size = Vector3.new(_G.HeadSize, _G.HeadSize, _G.HeadSize)
 	hrp.Shape = Enum.PartType.Ball
-	hrp.CanCollide = false
 	hrp.Material = Enum.Material.Neon
 	hrp.Transparency = 0.7
-	hrp.Color = Color3.new(1, 1, 1)
+	hrp.CanCollide = false
 
-	removeHitbox(character)
+	removeAdornment(character)
 
 	local color = player.Team and player.Team.TeamColor.Color or Color3.new(1, 1, 1)
 
@@ -99,45 +99,76 @@ local function applyToCharacter(player, character)
 	sphere.Color3 = color
 	sphere.Transparency = 0.7
 
+	-- Cleanup on death
 	humanoid.Died:Connect(function()
 		resetHitbox(character)
 	end)
 end
 
-local function refreshAllPlayers()
+--==================================================
+-- UPDATE TEAM COLOR (NO DEATH REQUIRED)
+--==================================================
+local function updateTeam(player)
+	if not player.Character then return end
+	local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	local adorn = hrp:FindFirstChild("HitboxOutline")
+
+	-- If ESP should not exist anymore
+	if not _G.Disabled or player.Team == LocalPlayer.Team then
+		resetHitbox(player.Character)
+		return
+	end
+
+	-- Update color if ESP exists
+	if adorn and player.Team then
+		adorn.Color3 = player.Team.TeamColor.Color
+	else
+		applyHitbox(player)
+	end
+end
+
+--==================================================
+-- REFRESH ALL PLAYERS
+--==================================================
+local function refreshAll()
 	for _, player in ipairs(Players:GetPlayers()) do
-		if player.Character then
-			applyToCharacter(player, player.Character)
-		end
+		applyHitbox(player)
 	end
 end
 
---------------------------------------------------
+--==================================================
 -- PLAYER HANDLERS
---------------------------------------------------
-for _, player in ipairs(Players:GetPlayers()) do
+--==================================================
+local function setupPlayer(player)
 	if player.Character then
-		applyToCharacter(player, player.Character)
+		applyHitbox(player)
 	end
 
-	player.CharacterAdded:Connect(function(character)
-		applyToCharacter(player, character)
+	player.CharacterAdded:Connect(function()
+		task.wait(0.1)
+		applyHitbox(player)
+	end)
+
+	player:GetPropertyChangedSignal("Team"):Connect(function()
+		updateTeam(player)
 	end)
 end
 
-Players.PlayerAdded:Connect(function(player)
-	player.CharacterAdded:Connect(function(character)
-		applyToCharacter(player, character)
-	end)
-end)
+for _, player in ipairs(Players:GetPlayers()) do
+	setupPlayer(player)
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
 
 LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
-	refreshAllPlayers()
+	refreshAll()
 end)
 
---------------------------------------------------
+--==================================================
 -- BUTTON LOGIC
---------------------------------------------------
+--==================================================
 local function updateButton()
 	if _G.Disabled then
 		button.Text = "Hitboxes: ON"
@@ -151,7 +182,7 @@ end
 button.MouseButton1Click:Connect(function()
 	_G.Disabled = not _G.Disabled
 	updateButton()
-	refreshAllPlayers()
+	refreshAll()
 end)
 
 updateButton()
