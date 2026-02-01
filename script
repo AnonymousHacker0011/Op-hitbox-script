@@ -63,7 +63,7 @@ local function applyToCharacter(player, character)
 	hrp.Shape = Enum.PartType.Ball
 	hrp.CanCollide = false
 	hrp.Material = Enum.Material.Neon
-	hrp.Transparency = 0.5
+	hrp.Transparency = 0.3
 
 	removeHitbox(character)
 
