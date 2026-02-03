@@ -33,7 +33,7 @@ corner.CornerRadius = UDim.new(0, 8)
 corner.Parent = button
 
 --==================================================
--- HITBOX HELPERS
+-- HITBOX UTILITIES
 --==================================================
 local function removeAdornment(character)
 	local hrp = character:FindFirstChild("HumanoidRootPart")
@@ -59,6 +59,11 @@ local function resetHitbox(character)
 	hrp.Color = Color3.new(1, 1, 1)
 end
 
+local function isDead(humanoid)
+	return humanoid.Health <= 0
+		or humanoid:GetState() == Enum.HumanoidStateType.Dead
+end
+
 --==================================================
 -- APPLY HITBOX
 --==================================================
@@ -70,7 +75,13 @@ local function applyHitbox(player)
 	local humanoid = character:FindFirstChild("Humanoid")
 	if not hrp or not humanoid then return end
 
-	-- Conditions where ESP should NOT exist
+	-- Never apply hitboxes to dead players
+	if isDead(humanoid) then
+		resetHitbox(character)
+		return
+	end
+
+	-- Conditions where hitboxes should NOT exist
 	if not _G.Disabled
 		or player == LocalPlayer
 		or player.Team == LocalPlayer.Team then
@@ -100,37 +111,24 @@ local function applyHitbox(player)
 	sphere.Transparency = 0.7
 
 	-- Cleanup on death
-	humanoid.Died:Connect(function()
+	humanoid.Died:Once(function()
 		resetHitbox(character)
 	end)
 end
 
 --==================================================
--- UPDATE TEAM COLOR (NO DEATH REQUIRED)
+-- TEAM UPDATE
 --==================================================
 local function updateTeam(player)
 	if not player.Character then return end
-	local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-	if not hrp then return end
+	local humanoid = player.Character:FindFirstChild("Humanoid")
+	if not humanoid or isDead(humanoid) then return end
 
-	local adorn = hrp:FindFirstChild("HitboxOutline")
-
-	-- If ESP should not exist anymore
-	if not _G.Disabled or player.Team == LocalPlayer.Team then
-		resetHitbox(player.Character)
-		return
-	end
-
-	-- Update color if ESP exists
-	if adorn and player.Team then
-		adorn.Color3 = player.Team.TeamColor.Color
-	else
-		applyHitbox(player)
-	end
+	applyHitbox(player)
 end
 
 --==================================================
--- REFRESH ALL PLAYERS
+-- REFRESH ALL
 --==================================================
 local function refreshAll()
 	for _, player in ipairs(Players:GetPlayers()) do
@@ -139,14 +137,14 @@ local function refreshAll()
 end
 
 --==================================================
--- PLAYER HANDLERS
+-- PLAYER HANDLING
 --==================================================
 local function setupPlayer(player)
 	if player.Character then
 		applyHitbox(player)
 	end
 
-	player.CharacterAdded:Connect(function()
+	player.CharacterAdded:Connect(function(character)
 		task.wait(0.1)
 		applyHitbox(player)
 	end)
@@ -162,9 +160,7 @@ end
 
 Players.PlayerAdded:Connect(setupPlayer)
 
-LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
-	refreshAll()
-end)
+LocalPlayer:GetPropertyChangedSignal("Team"):Connect(refreshAll)
 
 --==================================================
 -- BUTTON LOGIC
