@@ -2,7 +2,7 @@
 -- SETTINGS
 --==================================================
 _G.HeadSize = 15
-_G.Disabled = true
+_G.HitboxesEnabled = true
 _G.AimlockEnabled = false
 local AIM_RADIUS = 30
 
@@ -42,34 +42,68 @@ button.Parent = gui
 Instance.new("UICorner", button)
 
 --==================================================
--- HITBOX FUNCTIONS
+-- HITBOX FUNCTIONS (OG)
 --==================================================
-local function isDead(h) return h.Health <= 0 end
+local function isDead(h)
+	return h.Health <= 0
+end
+
+local function removeAdornment(character)
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	local adorn = hrp:FindFirstChild("HitboxOutline")
+	if adorn then adorn:Destroy() end
+end
 
 local function resetHitbox(character)
 	local hrp = character:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
+
+	removeAdornment(character)
 	hrp.Size = Vector3.new(2,2,1)
+	hrp.Shape = Enum.PartType.Block
+	hrp.Material = Enum.Material.Plastic
 	hrp.Transparency = 1
 	hrp.CanCollide = false
 end
 
 local function applyHitbox(player)
-	if not player.Character then return end
+	-- HARD BLOCK: never apply to local player or teammates
 	if player == LocalPlayer then return end
-	if player.Team == LocalPlayer.Team then return end
-	if not _G.Disabled then return end
+	if player.Team == LocalPlayer.Team then
+		if player.Character then
+			resetHitbox(player.Character)
+		end
+		return
+	end
+
+	if not _G.HitboxesEnabled then return end
+	if not player.Character then return end
 
 	local char = player.Character
 	local hrp = char:FindFirstChild("HumanoidRootPart")
 	local hum = char:FindFirstChild("Humanoid")
 	if not hrp or not hum or isDead(hum) then return end
 
+	-- OG hitbox
 	hrp.Size = Vector3.new(_G.HeadSize,_G.HeadSize,_G.HeadSize)
 	hrp.Shape = Enum.PartType.Ball
 	hrp.Material = Enum.Material.Neon
 	hrp.Transparency = 0.7
 	hrp.CanCollide = false
+
+	removeAdornment(char)
+
+	-- OG outline
+	local sphere = Instance.new("SphereHandleAdornment")
+	sphere.Name = "HitboxOutline"
+	sphere.Adornee = hrp
+	sphere.Parent = hrp
+	sphere.Radius = (_G.HeadSize / 2) + 0.1
+	sphere.AlwaysOnTop = true
+	sphere.ZIndex = 10
+	sphere.Transparency = 0.6
+	sphere.Color3 = player.Team and player.Team.TeamColor.Color or Color3.new(1,1,1)
 
 	hum.Died:Once(function()
 		resetHitbox(char)
@@ -77,7 +111,7 @@ local function applyHitbox(player)
 end
 
 --==================================================
--- AIMLOCK FUNCTIONS
+-- AIMLOCK (RESPAWN SAFE)
 --==================================================
 local function getClosestPlayerUnderCursor()
 	local mousePos = UserInputService:GetMouseLocation()
@@ -103,8 +137,7 @@ local function getClosestPlayerUnderCursor()
 end
 
 local function updateLockedHRP()
-	if not LockedPlayer then return end
-	if LockedPlayer.Character then
+	if LockedPlayer and LockedPlayer.Character then
 		LockedHRP = LockedPlayer.Character:FindFirstChild("HumanoidRootPart")
 	else
 		LockedHRP = nil
@@ -123,14 +156,12 @@ local function startAimlock()
 		end
 
 		if LockedPlayer then
-			-- Clear lock if player leaves or team changes
 			if not LockedPlayer.Parent or LockedPlayer.Team == LocalPlayer.Team then
 				LockedPlayer = nil
 				LockedHRP = nil
 				return
 			end
 
-			-- Re-acquire HRP after respawn
 			if not LockedHRP then
 				updateLockedHRP()
 			end
@@ -150,7 +181,7 @@ local function stopAimlock()
 end
 
 --==================================================
--- Z KEY TOGGLE
+-- INPUT (Z KEY)
 --==================================================
 UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
@@ -168,9 +199,12 @@ end)
 -- PLAYER HANDLING
 --==================================================
 local function setupPlayer(p)
-	if p.Character then applyHitbox(p) end
+	if p.Character then
+		applyHitbox(p)
+	end
+
 	p.CharacterAdded:Connect(function()
-		task.wait(0.1)
+		task.wait(0.15)
 		applyHitbox(p)
 		if p == LockedPlayer then
 			updateLockedHRP()
@@ -178,20 +212,24 @@ local function setupPlayer(p)
 	end)
 end
 
-for _,p in ipairs(Players:GetPlayers()) do setupPlayer(p) end
+for _, p in ipairs(Players:GetPlayers()) do
+	setupPlayer(p)
+end
 Players.PlayerAdded:Connect(setupPlayer)
 
 --==================================================
--- HITBOX BUTTON TOGGLE
+-- HITBOX TOGGLE BUTTON
 --==================================================
 button.MouseButton1Click:Connect(function()
-	_G.Disabled = not _G.Disabled
-	button.Text = _G.Disabled and "Hitboxes: ON" or "Hitboxes: OFF"
-	button.BackgroundColor3 = _G.Disabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(170,0,0)
+	_G.HitboxesEnabled = not _G.HitboxesEnabled
+	button.Text = _G.HitboxesEnabled and "Hitboxes: ON" or "Hitboxes: OFF"
+	button.BackgroundColor3 = _G.HitboxesEnabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(170,0,0)
 
-	for _,p in ipairs(Players:GetPlayers()) do
+	for _, p in ipairs(Players:GetPlayers()) do
 		if p.Character then
-			if _G.Disabled then
+			if p.Team == LocalPlayer.Team then
+				resetHitbox(p.Character)
+			elseif _G.HitboxesEnabled then
 				applyHitbox(p)
 			else
 				resetHitbox(p.Character)
