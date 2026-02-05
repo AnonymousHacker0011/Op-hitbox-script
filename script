@@ -2,9 +2,9 @@
 -- SETTINGS
 --==================================================
 _G.HeadSize = 15
-_G.Disabled = true -- Hitboxes toggle
-_G.AimlockEnabled = false -- Z key toggle
-local AIM_RADIUS = 30 -- pixels from cursor
+_G.Disabled = true
+_G.AimlockEnabled = false
+local AIM_RADIUS = 30
 
 --==================================================
 -- SERVICES
@@ -19,7 +19,8 @@ local Camera = workspace.CurrentCamera
 --==================================================
 -- AIMLOCK VARIABLES
 --==================================================
-local LockedTarget = nil
+local LockedPlayer = nil
+local LockedHRP = nil
 local AimConnection = nil
 
 --==================================================
@@ -45,17 +46,9 @@ Instance.new("UICorner", button)
 --==================================================
 local function isDead(h) return h.Health <= 0 end
 
-local function removeAdornment(character)
-	local hrp = character:FindFirstChild("HumanoidRootPart")
-	if not hrp then return end
-	local adorn = hrp:FindFirstChild("HitboxOutline")
-	if adorn then adorn:Destroy() end
-end
-
 local function resetHitbox(character)
 	local hrp = character:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
-	removeAdornment(character)
 	hrp.Size = Vector3.new(2,2,1)
 	hrp.Transparency = 1
 	hrp.CanCollide = false
@@ -72,35 +65,21 @@ local function applyHitbox(player)
 	local hum = char:FindFirstChild("Humanoid")
 	if not hrp or not hum or isDead(hum) then return end
 
-	-- Resize HRP
 	hrp.Size = Vector3.new(_G.HeadSize,_G.HeadSize,_G.HeadSize)
 	hrp.Shape = Enum.PartType.Ball
 	hrp.Material = Enum.Material.Neon
 	hrp.Transparency = 0.7
 	hrp.CanCollide = false
 
-	-- Remove old adornments
-	removeAdornment(char)
-
-	-- Create sphere outline (OG look)
-	local color = player.Team and player.Team.TeamColor.Color or Color3.new(1,1,1)
-	local sphere = Instance.new("SphereHandleAdornment")
-	sphere.Name = "HitboxOutline"
-	sphere.Adornee = hrp
-	sphere.Parent = hrp
-	sphere.Radius = (_G.HeadSize/2)+0.1
-	sphere.AlwaysOnTop = true
-	sphere.ZIndex = 10
-	sphere.Color3 = color
-	sphere.Transparency = 0.7
-
-	hum.Died:Once(function() resetHitbox(char) end)
+	hum.Died:Once(function()
+		resetHitbox(char)
+	end)
 end
 
 --==================================================
 -- AIMLOCK FUNCTIONS
 --==================================================
-local function getTargetUnderCursor()
+local function getClosestPlayerUnderCursor()
 	local mousePos = UserInputService:GetMouseLocation()
 	local closest, dist = nil, AIM_RADIUS
 
@@ -111,10 +90,10 @@ local function getTargetUnderCursor()
 			if hrp and hum and not isDead(hum) then
 				local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
 				if onScreen then
-					local d = (Vector2.new(screenPos.X,screenPos.Y) - mousePos).Magnitude
+					local d = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
 					if d < dist then
 						dist = d
-						closest = hrp
+						closest = p
 					end
 				end
 			end
@@ -123,15 +102,42 @@ local function getTargetUnderCursor()
 	return closest
 end
 
+local function updateLockedHRP()
+	if not LockedPlayer then return end
+	if LockedPlayer.Character then
+		LockedHRP = LockedPlayer.Character:FindFirstChild("HumanoidRootPart")
+	else
+		LockedHRP = nil
+	end
+end
+
 local function startAimlock()
 	if AimConnection then return end
+
 	AimConnection = RunService.RenderStepped:Connect(function()
 		if not _G.AimlockEnabled then return end
-		if not LockedTarget then
-			LockedTarget = getTargetUnderCursor()
+
+		if not LockedPlayer then
+			LockedPlayer = getClosestPlayerUnderCursor()
+			updateLockedHRP()
 		end
-		if LockedTarget and LockedTarget.Parent then
-			Camera.CFrame = CFrame.new(Camera.CFrame.Position, LockedTarget.Position)
+
+		if LockedPlayer then
+			-- Clear lock if player leaves or team changes
+			if not LockedPlayer.Parent or LockedPlayer.Team == LocalPlayer.Team then
+				LockedPlayer = nil
+				LockedHRP = nil
+				return
+			end
+
+			-- Re-acquire HRP after respawn
+			if not LockedHRP then
+				updateLockedHRP()
+			end
+
+			if LockedHRP then
+				Camera.CFrame = CFrame.new(Camera.CFrame.Position, LockedHRP.Position)
+			end
 		end
 	end)
 end
@@ -139,7 +145,8 @@ end
 local function stopAimlock()
 	if AimConnection then AimConnection:Disconnect() end
 	AimConnection = nil
-	LockedTarget = nil
+	LockedPlayer = nil
+	LockedHRP = nil
 end
 
 --==================================================
@@ -165,6 +172,9 @@ local function setupPlayer(p)
 	p.CharacterAdded:Connect(function()
 		task.wait(0.1)
 		applyHitbox(p)
+		if p == LockedPlayer then
+			updateLockedHRP()
+		end
 	end)
 end
 
