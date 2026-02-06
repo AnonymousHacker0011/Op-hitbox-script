@@ -42,178 +42,181 @@ button.Parent = gui
 Instance.new("UICorner", button)
 
 --==================================================
--- HITBOX FUNCTIONS (OG)
+-- HITBOX FUNCTIONS
 --==================================================
-local function isDead(h)
-	return h.Health <= 0
+local function isDead(humanoid)
+    return humanoid.Health <= 0
 end
 
 local function removeAdornment(character)
-	local hrp = character:FindFirstChild("HumanoidRootPart")
-	if not hrp then return end
-	local adorn = hrp:FindFirstChild("HitboxOutline")
-	if adorn then adorn:Destroy() end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local adorn = hrp:FindFirstChild("HitboxOutline")
+        if adorn then adorn:Destroy() end
+    end
 end
 
 local function resetHitbox(character)
-	local hrp = character:FindFirstChild("HumanoidRootPart")
-	if not hrp then return end
-
-	removeAdornment(character)
-	hrp.Size = Vector3.new(2,2,1)
-	hrp.Shape = Enum.PartType.Block
-	hrp.Material = Enum.Material.Plastic
-	hrp.Transparency = 1
-	hrp.CanCollide = false
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        removeAdornment(character)
+        hrp.Size = Vector3.new(2,2,1)
+        hrp.Shape = Enum.PartType.Block
+        hrp.Material = Enum.Material.Plastic
+        hrp.Transparency = 1
+        hrp.CanCollide = false
+    end
 end
 
 local function applyHitbox(player)
-	-- HARD BLOCK: never apply to local player or teammates
-	if player == LocalPlayer then return end
-	if player.Team == LocalPlayer.Team then
-		if player.Character then
-			resetHitbox(player.Character)
-		end
-		return
-	end
+    if player == LocalPlayer then return end
+    if player.Team == LocalPlayer.Team then
+        if player.Character then
+            resetHitbox(player.Character)
+        end
+        return
+    end
 
-	if not _G.HitboxesEnabled then return end
-	if not player.Character then return end
+    if not _G.HitboxesEnabled then return end
+    if not player.Character then return end
 
-	local char = player.Character
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-	local hum = char:FindFirstChild("Humanoid")
-	if not hrp or not hum or isDead(hum) then return end
+    local char = player.Character
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChild("Humanoid")
+    if not hrp or not hum or isDead(hum) then return end
 
-	-- OG hitbox
-	hrp.Size = Vector3.new(_G.HeadSize,_G.HeadSize,_G.HeadSize)
-	hrp.Shape = Enum.PartType.Ball
-	hrp.Material = Enum.Material.Neon
-	hrp.Transparency = 0.7
-	hrp.CanCollide = false
+    -- Hitbox
+    hrp.Size = Vector3.new(_G.HeadSize,_G.HeadSize,_G.HeadSize)
+    hrp.Shape = Enum.PartType.Ball
+    hrp.Material = Enum.Material.Neon
+    hrp.Transparency = 0.7
+    hrp.CanCollide = false
 
-	removeAdornment(char)
+    removeAdornment(char)
 
-	-- OG outline
-	local sphere = Instance.new("SphereHandleAdornment")
-	sphere.Name = "HitboxOutline"
-	sphere.Adornee = hrp
-	sphere.Parent = hrp
-	sphere.Radius = (_G.HeadSize / 2) + 0.1
-	sphere.AlwaysOnTop = true
-	sphere.ZIndex = 10
-	sphere.Transparency = 0.6
-	sphere.Color3 = player.Team and player.Team.TeamColor.Color or Color3.new(1,1,1)
+    local sphere = Instance.new("SphereHandleAdornment")
+    sphere.Name = "HitboxOutline"
+    sphere.Adornee = hrp
+    sphere.Parent = hrp
+    sphere.Radius = (_G.HeadSize/2)+0.1
+    sphere.AlwaysOnTop = true
+    sphere.ZIndex = 10
+    sphere.Transparency = 0.6
+    sphere.Color3 = Color3.new(1,0,0) -- red for enemies
 
-	hum.Died:Once(function()
-		resetHitbox(char)
-	end)
+    -- Respawn-safe
+    hum.Died:Once(function()
+        resetHitbox(char)
+        player.CharacterAdded:Wait()
+        task.wait(0.1)
+        applyHitbox(player)
+    end)
 end
 
 --==================================================
--- AIMLOCK (RESPAWN SAFE)
+-- AIMLOCK FUNCTIONS
 --==================================================
 local function getClosestPlayerUnderCursor()
-	local mousePos = UserInputService:GetMouseLocation()
-	local closest, dist = nil, AIM_RADIUS
+    local mousePos = UserInputService:GetMouseLocation()
+    local closest, dist = nil, AIM_RADIUS
 
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= LocalPlayer and p.Team ~= LocalPlayer.Team and p.Character then
-			local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-			local hum = p.Character:FindFirstChild("Humanoid")
-			if hrp and hum and not isDead(hum) then
-				local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-				if onScreen then
-					local d = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-					if d < dist then
-						dist = d
-						closest = p
-					end
-				end
-			end
-		end
-	end
-	return closest
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Team ~= LocalPlayer.Team and p.Character then
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            local hum = p.Character:FindFirstChild("Humanoid")
+            if hrp and hum and not isDead(hum) then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                if onScreen then
+                    local d = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    if d < dist then
+                        dist = d
+                        closest = p
+                    end
+                end
+            end
+        end
+    end
+
+    return closest
 end
 
 local function updateLockedHRP()
-	if LockedPlayer and LockedPlayer.Character then
-		LockedHRP = LockedPlayer.Character:FindFirstChild("HumanoidRootPart")
-	else
-		LockedHRP = nil
-	end
+    if LockedPlayer and LockedPlayer.Character then
+        LockedHRP = LockedPlayer.Character:FindFirstChild("HumanoidRootPart")
+    else
+        LockedHRP = nil
+    end
 end
 
 local function startAimlock()
-	if AimConnection then return end
+    if AimConnection then return end
 
-	AimConnection = RunService.RenderStepped:Connect(function()
-		if not _G.AimlockEnabled then return end
+    AimConnection = RunService.RenderStepped:Connect(function()
+        if not _G.AimlockEnabled then return end
 
-		if not LockedPlayer then
-			LockedPlayer = getClosestPlayerUnderCursor()
-			updateLockedHRP()
-		end
+        if not LockedPlayer then
+            LockedPlayer = getClosestPlayerUnderCursor()
+            updateLockedHRP()
+        end
 
-		if LockedPlayer then
-			if not LockedPlayer.Parent or LockedPlayer.Team == LocalPlayer.Team then
-				LockedPlayer = nil
-				LockedHRP = nil
-				return
-			end
+        if LockedPlayer then
+            if not LockedPlayer.Parent or LockedPlayer.Team == LocalPlayer.Team then
+                LockedPlayer = nil
+                LockedHRP = nil
+                return
+            end
 
-			if not LockedHRP then
-				updateLockedHRP()
-			end
+            if not LockedHRP then
+                updateLockedHRP()
+            end
 
-			if LockedHRP then
-				Camera.CFrame = CFrame.new(Camera.CFrame.Position, LockedHRP.Position)
-			end
-		end
-	end)
+            if LockedHRP then
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, LockedHRP.Position)
+            end
+        end
+    end)
 end
 
 local function stopAimlock()
-	if AimConnection then AimConnection:Disconnect() end
-	AimConnection = nil
-	LockedPlayer = nil
-	LockedHRP = nil
+    if AimConnection then AimConnection:Disconnect() end
+    AimConnection = nil
+    LockedPlayer = nil
+    LockedHRP = nil
 end
 
 --==================================================
 -- INPUT (Z KEY)
 --==================================================
 UserInputService.InputBegan:Connect(function(input, gp)
-	if gp then return end
-	if input.KeyCode == Enum.KeyCode.Z then
-		_G.AimlockEnabled = not _G.AimlockEnabled
-		if _G.AimlockEnabled then
-			startAimlock()
-		else
-			stopAimlock()
-		end
-	end
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.Z then
+        _G.AimlockEnabled = not _G.AimlockEnabled
+        if _G.AimlockEnabled then
+            startAimlock()
+        else
+            stopAimlock()
+        end
+    end
 end)
 
 --==================================================
 -- PLAYER HANDLING
 --==================================================
 local function setupPlayer(p)
-	if p.Character then
-		applyHitbox(p)
-	end
-
-	p.CharacterAdded:Connect(function()
-		task.wait(0.15)
-		applyHitbox(p)
-		if p == LockedPlayer then
-			updateLockedHRP()
-		end
-	end)
+    if p.Character then
+        applyHitbox(p)
+    end
+    p.CharacterAdded:Connect(function()
+        task.wait(0.15)
+        applyHitbox(p)
+        if p == LockedPlayer then
+            updateLockedHRP()
+        end
+    end)
 end
 
 for _, p in ipairs(Players:GetPlayers()) do
-	setupPlayer(p)
+    setupPlayer(p)
 end
 Players.PlayerAdded:Connect(setupPlayer)
 
@@ -221,19 +224,19 @@ Players.PlayerAdded:Connect(setupPlayer)
 -- HITBOX TOGGLE BUTTON
 --==================================================
 button.MouseButton1Click:Connect(function()
-	_G.HitboxesEnabled = not _G.HitboxesEnabled
-	button.Text = _G.HitboxesEnabled and "Hitboxes: ON" or "Hitboxes: OFF"
-	button.BackgroundColor3 = _G.HitboxesEnabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(170,0,0)
+    _G.HitboxesEnabled = not _G.HitboxesEnabled
+    button.Text = _G.HitboxesEnabled and "Hitboxes: ON" or "Hitboxes: OFF"
+    button.BackgroundColor3 = _G.HitboxesEnabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(170,0,0)
 
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p.Character then
-			if p.Team == LocalPlayer.Team then
-				resetHitbox(p.Character)
-			elseif _G.HitboxesEnabled then
-				applyHitbox(p)
-			else
-				resetHitbox(p.Character)
-			end
-		end
-	end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then
+            if p.Team == LocalPlayer.Team then
+                resetHitbox(p.Character)
+            elseif _G.HitboxesEnabled then
+                applyHitbox(p)
+            else
+                resetHitbox(p.Character)
+            end
+        end
+    end
 end)
