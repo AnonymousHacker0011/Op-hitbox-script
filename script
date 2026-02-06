@@ -221,6 +221,20 @@ end
 Players.PlayerAdded:Connect(setupPlayer)
 
 --==================================================
+-- TEAM CHANGE HANDLING
+--==================================================
+LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+    -- Remove hitboxes from all new teammates
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Team == LocalPlayer.Team and p.Character then
+            resetHitbox(p.Character)
+        elseif p.Team ~= LocalPlayer.Team then
+            applyHitbox(p)
+        end
+    end
+end)
+
+--==================================================
 -- HITBOX TOGGLE BUTTON
 --==================================================
 button.MouseButton1Click:Connect(function()
