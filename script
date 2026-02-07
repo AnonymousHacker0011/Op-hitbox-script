@@ -109,12 +109,8 @@ local function applyHitbox(player)
         sphere.Transparency = 0.6
     end
 
-    -- Set team color
-    if player.Team then
-        sphere.Color3 = player.Team.TeamColor.Color
-    else
-        sphere.Color3 = Color3.new(1,1,1) -- white if no team
-    end
+    -- TEAM-COLORED hitbox using player.TeamColor
+    sphere.Color3 = player.TeamColor.Color
 
     -- Respawn-safe
     hum.Died:Once(function()
