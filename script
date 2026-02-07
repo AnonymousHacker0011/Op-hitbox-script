@@ -79,7 +79,6 @@ local function applyHitbox(player)
         end
         return
     end
-
     if not _G.HitboxesEnabled then return end
     if not player.Character then return end
 
@@ -88,7 +87,6 @@ local function applyHitbox(player)
     local hum = char:FindFirstChild("Humanoid")
     if not hrp or not hum or isDead(hum) then return end
 
-    -- Apply hitbox
     hrp.Size = Vector3.new(_G.HeadSize,_G.HeadSize,_G.HeadSize)
     hrp.Shape = Enum.PartType.Ball
     hrp.Material = Enum.Material.Neon
@@ -109,10 +107,8 @@ local function applyHitbox(player)
         sphere.Transparency = 0.6
     end
 
-    -- TEAM-COLORED hitbox using player.TeamColor
     sphere.Color3 = player.TeamColor.Color
 
-    -- Respawn-safe
     hum.Died:Once(function()
         resetHitbox(char)
         player.CharacterAdded:Wait()
@@ -213,11 +209,27 @@ local function setupPlayer(p)
     if p.Character then
         applyHitbox(p)
     end
+
     p.CharacterAdded:Connect(function()
         task.wait(0.15)
         applyHitbox(p)
         if p == LockedPlayer then
             updateLockedHRP()
+        end
+    end)
+
+    -- Update hitbox color on team change
+    p:GetPropertyChangedSignal("Team"):Connect(function()
+        if p.Character then
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            local adorn = hrp and hrp:FindFirstChild("HitboxOutline")
+            if hrp and adorn then
+                if p.Team == LocalPlayer.Team then
+                    resetHitbox(p.Character)
+                else
+                    adorn.Color3 = p.TeamColor.Color
+                end
+            end
         end
     end)
 end
@@ -228,7 +240,7 @@ end
 Players.PlayerAdded:Connect(setupPlayer)
 
 --==================================================
--- TEAM CHANGE HANDLING
+-- LOCAL PLAYER TEAM CHANGE HANDLING
 --==================================================
 LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
     for _, p in ipairs(Players:GetPlayers()) do
